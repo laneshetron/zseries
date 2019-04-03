@@ -7,4 +7,5 @@ setup(
     name='zseries',
     version='0.0.1',
     url='https://github.com/laneshetron/zseries.git',
+    packages=['zseries'],
     install_requires=requirements)
