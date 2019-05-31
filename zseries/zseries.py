@@ -6,7 +6,7 @@ import zstd
 
 BASE_DIR = '_zseries'
 BLOCK_SIZE = 512
-FILE_SIZE = 1048576
+FILE_SIZE = 10485760
 
 class ZSeries:
     msg_buffers = {}
@@ -56,7 +56,9 @@ class ZSeries:
     def write(self, key, data):
         self._init_handler(key)
 
-        msg = data.encode() + "\n".encode()
+        if not isinstance(data, bytes):
+            msg = data.encode()
+        msg = data + "\n".encode()
         if len(msg) + len(self.msg_buffers[key]) > BLOCK_SIZE * 200:
             self._write_handler(key)
 
