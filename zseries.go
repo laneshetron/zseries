@@ -31,23 +31,13 @@ type ZSeries struct {
 	Handlers ZFiles
 }
 
-type Writer struct {
-	handler *handler
-}
-
-func NewWriter(h *handler) *Writer {
-	return &Writer{
-		handler: h,
-	}
-}
-
-func (w *Writer) Write(p []byte) (int, error) {
-	i, err := w.handler.log.Write(p)
+func (h *handler) Write(p []byte) (int, error) {
+	i, err := h.log.Write(p)
 	// Write index offsets
-	w.handler.index.WriteString(fmt.Sprintf("%i,%i\n", w.handler.offset, w.handler.written))
+	h.index.WriteString(fmt.Sprintf("%i,%i\n", h.offset, h.written))
 
-	w.handler.written += i
-	w.handler.offset += 1
+	h.written += i
+	h.offset += 1
 	return i, err
 }
 
@@ -107,7 +97,7 @@ func (z *ZSeries) initTopic(key string) error {
 
 		// The integer math here should truncate any misalignment
 		h.logSize = os.Getpagesize() * (FILE_SIZE / os.Getpagesize())
-		h.zWriter = zstd.NewWriterLevel(NewWriter(h), 1)
+		h.zWriter = zstd.NewWriterLevel(h, 1)
 		h.buffer = bufio.NewWriterSize(h.zWriter, SEGMENT_SIZE)
 		if err != nil {
 			return err
