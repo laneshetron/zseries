@@ -2,7 +2,7 @@ package main
 
 import (
 	"C"
-	"github.com/laneshetron/zseries"
+	"github.com/laneshetron/zseries/zseries"
 )
 
 var z zseries.ZSeries
