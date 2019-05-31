@@ -1,17 +1,20 @@
-package main
+package zseries
 
 import (
-	"C"
 	"bufio"
 	"fmt"
 	"os"
 	"path"
 	"strconv"
-	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/DataDog/zstd"
+)
+
+const (
+	BASE_DIR     = "_zseries"
+	FILE_SIZE    = 10485760
+	SEGMENT_SIZE = 102400
 )
 
 type handler struct {
@@ -39,37 +42,6 @@ func (h *handler) Write(p []byte) (int, error) {
 	h.written += i
 	h.offset += 1
 	return i, err
-}
-
-// he protec
-func mprotect_ro(f *os.File, b []byte) error {
-	return syscall.Mprotect(b, syscall.PROT_READ)
-}
-
-// but he also attac
-func mprotect_rw(f *os.File, b []byte) error {
-	return syscall.Mprotect(b, syscall.PROT_READ|syscall.PROT_WRITE)
-}
-
-func mmap(f *os.File, size int) ([]byte, error) {
-	b, err := syscall.Mmap(int(f.Fd()), 0, size, syscall.PROT_READ, syscall.MAP_SHARED)
-	if err != nil {
-		return nil, err
-	}
-	// Advise the kernel of random access
-	if err := madvise(b, syscall.MADV_RANDOM); err != nil {
-		return b, err
-	}
-	return b, nil
-}
-
-// Copied from https://github.com/boltdb/bolt/blob/master/bolt_unix.go (who copied it from stdlib?)
-func madvise(b []byte, advice int) (err error) {
-	_, _, e1 := syscall.Syscall(syscall.SYS_MADVISE, uintptr(unsafe.Pointer(&b[0])), uintptr(len(b)), uintptr(advice))
-	if e1 != 0 {
-		err = e1
-	}
-	return
 }
 
 func (z *ZSeries) getPath(key string) string {
@@ -137,23 +109,3 @@ func (z *ZSeries) Write(key string, data []byte) (int, error) {
 	}
 	return h.buffer.Write(data)
 }
-
-const (
-	BASE_DIR     = "_zseries"
-	FILE_SIZE    = 10485760
-	SEGMENT_SIZE = 102400
-)
-
-var z ZSeries
-
-func init() {
-	z = ZSeries{}
-}
-
-//export Write
-func Write(key string, data []byte) int {
-	i, _ := z.Write(key, data)
-	return i
-}
-
-func main() {}
