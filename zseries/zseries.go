@@ -34,10 +34,16 @@ type ZSeries struct {
 	Handlers ZFiles
 }
 
+func NewZSeries() *ZSeries {
+	z := &ZSeries{}
+	z.Handlers = make(ZFiles)
+	return z
+}
+
 func (h *handler) Write(p []byte) (int, error) {
 	i, err := h.log.Write(p)
 	// Write index offsets
-	h.index.WriteString(fmt.Sprintf("%i,%i\n", h.offset, h.written))
+	h.index.WriteString(fmt.Sprintf("%d,%d\n", h.offset, h.written))
 
 	h.written += i
 	h.offset += 1
@@ -58,11 +64,11 @@ func (z *ZSeries) initTopic(key string) error {
 		path := z.getPath(key)
 		z.Handlers[key] = &handler{}
 		h := z.Handlers[key]
-		h.log, err = os.OpenFile(path+".log", os.O_RDWR|os.O_CREATE, os.ModePerm)
+		h.log, err = os.OpenFile(path+".log", os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {
 			return err
 		}
-		h.index, err = os.OpenFile(path+".index", os.O_RDWR|os.O_CREATE, os.ModePerm)
+		h.index, err = os.OpenFile(path+".index", os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {
 			return err
 		}
@@ -74,6 +80,16 @@ func (z *ZSeries) initTopic(key string) error {
 		if err != nil {
 			return err
 		}
+
+		// Advise the kernel of future writes
+		Fadvise(int(h.log.Fd()), 0, int64(h.logSize))
+		err = Fallocate(int(h.log.Fd()), 0, 0, int64(h.logSize))
+		if err != nil {
+			// If Fallocate fails it's likely unsupported on this filesystem
+			// ergo, fallback to Ftruncate
+			Ftruncate(int(h.log.Fd()), int64(h.logSize))
+		}
+		h.log.Seek(0, 0)
 	}
 	return nil
 }

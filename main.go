@@ -5,10 +5,10 @@ import (
 	"github.com/laneshetron/zseries/zseries"
 )
 
-var z zseries.ZSeries
+var z *zseries.ZSeries
 
 func init() {
-	z = zseries.ZSeries{}
+	z = zseries.NewZSeries()
 }
 
 //export Write
