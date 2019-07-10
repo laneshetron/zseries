@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/DataDog/zstd"
@@ -16,6 +17,8 @@ const (
 	FILE_SIZE    = 10485760
 	SEGMENT_SIZE = 102400
 )
+
+var wg sync.WaitGroup
 
 type handler struct {
 	log     *os.File
@@ -50,6 +53,22 @@ func (h *handler) Write(p []byte) (int, error) {
 	return i, err
 }
 
+type AsyncWriter struct {
+	handler *handler
+}
+
+func (w *AsyncWriter) Write(p []byte) (int, error) {
+	zWriter := zstd.NewWriterLevel(w.handler, 1)
+
+	wg.Add(1)
+	go func(buffer *zstd.Writer, data []byte) {
+		defer wg.Done()
+		buffer.Write(data)
+		buffer.Close()
+	}(zWriter, p)
+	return len(p), nil
+}
+
 func (z *ZSeries) getPath(key string) string {
 	return path.Join(BASE_DIR, key, strconv.FormatInt(time.Now().UnixNano(), 10))
 }
@@ -75,8 +94,8 @@ func (z *ZSeries) initTopic(key string) error {
 
 		// The integer math here should truncate any misalignment
 		h.logSize = os.Getpagesize() * (FILE_SIZE / os.Getpagesize())
-		h.zWriter = zstd.NewWriterLevel(h, 1)
-		h.buffer = bufio.NewWriterSize(h.zWriter, SEGMENT_SIZE)
+		asyncWriter := &AsyncWriter{handler: h}
+		h.buffer = bufio.NewWriterSize(asyncWriter, SEGMENT_SIZE)
 		if err != nil {
 			return err
 		}
@@ -97,9 +116,9 @@ func (z *ZSeries) initTopic(key string) error {
 func (z *ZSeries) rollLog(key string, size int) error {
 	if h, ok := z.Handlers[key]; ok {
 		if size+h.buffer.Buffered()+h.written > h.logSize {
+			wg.Wait()
 			// close handlers & reopen
 			h.buffer.Flush()
-			h.zWriter.Close()
 			h.log.Sync()
 			h.index.Sync()
 			h.log.Close()
