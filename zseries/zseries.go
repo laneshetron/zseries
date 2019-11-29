@@ -3,6 +3,7 @@ package zseries
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strconv"
@@ -14,11 +15,11 @@ import (
 
 const (
 	BASE_DIR     = "_zseries"
-	FILE_SIZE    = 10485760
-	SEGMENT_SIZE = 102400
+	FILE_SIZE    = 52428800
+	SEGMENT_SIZE = 1048576
 )
 
-var wg sync.WaitGroup
+var lock sync.TicketLock
 
 type handler struct {
 	log     *os.File
@@ -53,16 +54,29 @@ func (h *handler) Write(p []byte) (int, error) {
 	return i, err
 }
 
+type OrderedWriter struct {
+	handler io.Writer
+	ticket  uint32
+}
+
+func NewOrderedWriter(w io.Writer, ticket uint32) *OrderedWriter {
+	return &OrderedWriter{w, ticket}
+}
+
+func (w *OrderedWriter) Write(p []byte) (int, error) {
+	defer lock.Done(w.ticket)
+	lock.Wait(w.ticket - 1)
+	return w.handler.Write(p)
+}
+
 type AsyncWriter struct {
 	handler *handler
 }
 
 func (w *AsyncWriter) Write(p []byte) (int, error) {
-	zWriter := zstd.NewWriterLevel(w.handler, 1)
+	zWriter := zstd.NewWriterLevel(NewOrderedWriter(w.handler, lock.Add()), 1)
 
-	wg.Add(1)
 	go func(buffer *zstd.Writer, data []byte) {
-		defer wg.Done()
 		buffer.Write(data)
 		buffer.Close()
 	}(zWriter, p)
@@ -106,7 +120,7 @@ func (z *ZSeries) initTopic(key string) error {
 		if err != nil {
 			// If Fallocate fails it's likely unsupported on this filesystem
 			// ergo, fallback to Ftruncate
-			Ftruncate(int(h.log.Fd()), int64(h.logSize))
+			//Ftruncate(int(h.log.Fd()), int64(h.logSize))
 		}
 		h.log.Seek(0, 0)
 	}
@@ -116,7 +130,6 @@ func (z *ZSeries) initTopic(key string) error {
 func (z *ZSeries) rollLog(key string, size int) error {
 	if h, ok := z.Handlers[key]; ok {
 		if size+h.buffer.Buffered()+h.written > h.logSize {
-			wg.Wait()
 			// close handlers & reopen
 			h.buffer.Flush()
 			h.log.Sync()
