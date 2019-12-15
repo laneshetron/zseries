@@ -33,7 +33,10 @@ func main() {
 			}
 		}
 		if len(data) == 2 {
-			z.Write(string(data[0]), data[1])
+			_, err = z.Write(string(data[0]), data[1])
+			if err != nil {
+				log.Fatal("Error while writing to ZSeries:", err)
+			}
 		}
 	}
 }
