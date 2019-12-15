@@ -131,29 +131,56 @@ func (z *ZSeries) rollLog(key string, size int) error {
 	if h, ok := z.Handlers[key]; ok {
 		if size+h.buffer.Buffered()+h.written > h.logSize {
 			// close handlers & reopen
-			h.buffer.Flush()
-			h.log.Sync()
-			h.index.Sync()
-			h.log.Close()
-			h.index.Close()
-			delete(z.Handlers, key)
+			err := z.closeHandler(key)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return z.initTopic(key)
 }
 
+func (z *ZSeries) closeHandler(key string) (err error) {
+	if h, ok := z.Handlers[key]; ok {
+		if h.buffer.Buffered() > 0 {
+			err = h.buffer.Flush()
+		}
+		// close handlers
+		h.log.Sync()
+		h.index.Sync()
+		h.log.Close()
+		h.index.Close()
+		delete(z.Handlers, key)
+	}
+	return err
+}
+
 func (z *ZSeries) Write(key string, data []byte) (int, error) {
-	err := z.rollLog(key, len(data))
+	size := len(data) + 1 // Add 1 for newline
+	err := z.rollLog(key, size)
 	if err != nil {
 		// TODO handle error
 		return 0, err
 	}
 	h := z.Handlers[key]
-	if len(data) > h.buffer.Available() && len(data) <= h.buffer.Size() {
-		err = h.buffer.Flush()
-		if err != nil {
-			return 0, err
+	if len(data) > h.buffer.Available() && size <= h.buffer.Size() {
+		if h.buffer.Buffered() > 0 {
+			err = h.buffer.Flush()
+			if err != nil {
+				return 0, err
+			}
 		}
 	}
+	defer h.buffer.WriteByte(byte('\n'))
 	return h.buffer.Write(data)
+}
+
+func (z *ZSeries) Close() error {
+	for key, _ := range z.Handlers {
+		err := z.closeHandler(key)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -17,4 +17,9 @@ func Write(key string, data []byte) int {
 	return i
 }
 
+//export Close
+func Close() {
+	z.Close()
+}
+
 func main() {}
