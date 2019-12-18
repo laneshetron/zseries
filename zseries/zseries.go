@@ -109,7 +109,7 @@ func (z *ZSeries) initTopic(key string) error {
 		// The integer math here should truncate any misalignment
 		h.logSize = os.Getpagesize() * (FILE_SIZE / os.Getpagesize())
 		asyncWriter := &AsyncWriter{handler: h}
-		h.buffer = bufio.NewWriterSize(asyncWriter, SEGMENT_SIZE)
+		h.buffer = bufio.NewWriterSize(asyncWriter, SEGMENT_SIZE/32)
 		if err != nil {
 			return err
 		}
