@@ -19,6 +19,17 @@ func main() {
 	}
 	log.Println("ZSeries bound on *:1337")
 
+	// Bind outbound socket
+	osock, err := zmq.NewSocket(zmq.PUSH)
+	if err != nil {
+		panic(err)
+	}
+	err = osock.Bind("tcp://*:1338")
+	if err != nil {
+		panic(err)
+	}
+	log.Println("ZSeries bound on *:1338")
+
 	z := zseries.NewZSeries()
 	defer z.Close()
 
@@ -36,6 +47,10 @@ func main() {
 			_, err = z.Write(string(data[0]), data[1])
 			if err != nil {
 				log.Fatal("Error while writing to ZSeries:", err)
+			}
+			_, err = osock.SendMessageDontwait(data)
+			if err != nil {
+				log.Println("Error while writing to outbound socket:", err)
 			}
 		}
 	}
