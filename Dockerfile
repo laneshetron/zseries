@@ -1,12 +1,12 @@
 FROM brandoshmando/go:1.13.4-ticket-lock AS binary
 
-ADD . /build
-
 RUN apk add --no-cache --virtual .build-deps \
     gcc \
     musl-dev \
     openssl \
     zeromq-dev
+
+ADD . /build
 
 WORKDIR /build
 RUN CGO_ENABLED=1 go build cmd/server.go
