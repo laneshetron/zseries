@@ -145,7 +145,6 @@ func (z *ZSeries) closeHandler(key string) (err error) {
 		if h.buffer.Buffered() > 0 {
 			err = h.buffer.Flush()
 		}
-		lock.Wait(lock.Add())
 		t := lock.Add()
 		lock.Wait(t - 1)
 		lock.Done(t)
