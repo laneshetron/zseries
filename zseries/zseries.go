@@ -145,9 +145,6 @@ func (z *ZSeries) closeHandler(key string) (err error) {
 		if h.buffer.Buffered() > 0 {
 			err = h.buffer.Flush()
 		}
-		t := lock.Add()
-		lock.Wait(t - 1)
-		lock.Done(t)
 
 		// close handlers
 		h.log.Sync()
@@ -160,7 +157,8 @@ func (z *ZSeries) closeHandler(key string) (err error) {
 }
 
 func (z *ZSeries) Write(key string, data []byte) (int, error) {
-	size := len(data) + 1 // Add 1 for newline
+	data = append(data, byte('\n'))
+	size := len(data)
 	err := z.rollLog(key, size)
 	if err != nil {
 		// TODO handle error
@@ -175,7 +173,6 @@ func (z *ZSeries) Write(key string, data []byte) (int, error) {
 			}
 		}
 	}
-	defer h.buffer.WriteByte(byte('\n'))
 	return h.buffer.Write(data)
 }
 
@@ -186,5 +183,9 @@ func (z *ZSeries) Close() error {
 			return err
 		}
 	}
+	t := lock.Add()
+	lock.Wait(t - 1)
+	lock.Done(t)
+
 	return nil
 }
