@@ -95,8 +95,7 @@ func (z *ZSeries) initTopic(key string) error {
 		}
 
 		path := z.getPath(key)
-		z.Handlers[key] = &handler{}
-		h := z.Handlers[key]
+		h := &handler{}
 		h.log, err = os.OpenFile(path+".log", os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {
 			return err
@@ -110,9 +109,6 @@ func (z *ZSeries) initTopic(key string) error {
 		h.logSize = os.Getpagesize() * (FILE_SIZE / os.Getpagesize())
 		asyncWriter := &AsyncWriter{handler: h}
 		h.buffer = bufio.NewWriterSize(asyncWriter, SEGMENT_SIZE)
-		if err != nil {
-			return err
-		}
 
 		// Advise the kernel of future writes
 		Fadvise(int(h.log.Fd()), 0, int64(h.logSize))
@@ -123,6 +119,8 @@ func (z *ZSeries) initTopic(key string) error {
 			//Ftruncate(int(h.log.Fd()), int64(h.logSize))
 		}
 		h.log.Seek(0, 0)
+
+		z.Handlers[key] = h
 	}
 	return nil
 }
